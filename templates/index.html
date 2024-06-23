@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Recommendation System</title>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Poppins, sans-serif;
+        }
+
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1,
+        h2 {
+            color: #3e3e3e;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        li {
+            list-style-type: none;
+        }
+
+        li a {
+            color: #5757d5;
+            font-weight: 400;
+        }
+
+        #course-search {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        #course-details {
+            margin-bottom: 10px;
+            display: none;
+        }
+
+        #course-details p {
+            margin-bottom: 15px;
+        }
+
+        #recommend-btn {
+            display: block;
+            padding: 10px 15px;
+            background-color: #5757d5;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+
+        #recommendations {
+            margin: 20px 0;
+        }
+
+        .difficulty,
+        .specialization,
+        .emerging,
+        #selected-specialization,
+        #selected-difficulty,
+        #selected-emerging {
+            display: inline-block;
+            margin: 15px 15px 15px 0;
+            text-transform: capitalize;
+            padding: 2px 6px;
+            color: #3e3e3e;
+            border-radius: 6px;
+        }
+
+        .difficulty,
+        .specialization,
+        #selected-specialization,
+        #selected-difficulty {
+            background-color: #f3f3f3;
+        }
+
+        .emerging,
+        #selected-emerging {
+            background-color: #ffeb3b;
+        }
+
+        #loading {
+            margin-top: 20px;
+            color: #3e3e3e;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Course Recommendation System</h1>
+    <input type="text" id="course-search" placeholder="Search for a course">
+    <div id="course-details">
+        <p>
+            <span id="selected-difficulty"></span>
+            <span id="selected-specialization"></span>
+            <span id="selected-emerging"></span>
+        </p>
+    </div>
+    <button id="recommend-btn">Recommend</button>
+    <div id="loading" style="display: none;">Loading recommendations...</div>
+    <div id="recommendations"></div>
+
+    <script>
+        $(document).ready(function () {
+            $('#course-search').autocomplete({
+                source: function (request, response) {
+                    $.ajax({
+                        url: '/search_courses',
+                        method: 'GET',
+                        data: { query: request.term },
+                        success: function (data) {
+                            response($.map(data, function (item) {
+                                return {
+                                    label: item['Course Name'],
+                                    value: item['Course Name'],
+                                    difficulty: item['Difficulty Level'],
+                                    specialization: item['Specialization'],
+                                    is_emerging: item['Is_Emerging_Tech']
+                                };
+                            }));
+                        }
+                    });
+                },
+                minLength: 2,
+                select: function (event, ui) {
+                    $(this).val(ui.item.value);
+                    $('#selected-difficulty').text(ui.item.difficulty);
+                    $('#selected-specialization').text(ui.item.specialization);
+                    if (ui.item.is_emerging === "true") {
+                        $('#selected-emerging').text("Emerging Technology").show();
+                    } else {
+                        $('#selected-emerging').hide();
+                    }
+                    $('#course-details').show();
+                    return false;
+                }
+            }).on('input', function () {
+                $('#course-details').hide();
+            });
+
+            $('#recommend-btn').click(function () {
+                var selectedCourse = $('#course-search').val();
+                if (selectedCourse) {
+                    // Show loading message
+                    $('#loading').show();
+                    $('#recommendations').hide();
+
+                    $.ajax({
+                        url: '/recommend',
+                        method: 'POST',
+                        data: { course_name: selectedCourse },
+                        success: function (response) {
+                            var recommendationsHtml = '<h2>Recommendations for ' + selectedCourse + ':</h2><ul>';
+                            for (var i = 0; i < response.length; i++) {
+                                recommendationsHtml += '<li><a href="' + response[i].url + '" target="_blank">' +
+                                    response[i].name + '</a><br><span class="difficulty">' +
+                                    response[i].difficulty + '</span><span class="specialization">' +
+                                    response[i].specialization + '</span>';
+                                if (response[i].is_emerging === "true") {
+                                    recommendationsHtml += '<span class="emerging">Emerging Technology</span>';
+                                }
+                                recommendationsHtml += '</li>';
+                            }
+                            recommendationsHtml += '</ul>';
+
+                            // Hide loading message and show recommendations
+                            $('#loading').hide();
+                            $('#recommendations').html(recommendationsHtml).show();
+                        },
+                        error: function (jqXHR, textStatus, errorThrown) {
+                            console.error("AJAX error:", textStatus, errorThrown);
+                            console.log("Response:", jqXHR.responseText);
+
+                            // Hide loading message and show error
+                            $('#loading').hide();
+                            $('#recommendations').html('<p>Error fetching recommendations. Please try again.</p>').show();
+                        }
+                    });
+                } else {
+                    $('#recommendations').html('<p>Please select a course first.</p>');
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
